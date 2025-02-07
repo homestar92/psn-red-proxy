@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "PSNRedProxy": {
+      "commandName": "Project",
+      "commandLineArgs": "-i 192.168.170.149 -p 8080 -l \"Z:\\pspackages\""
+    }
+  }
+}

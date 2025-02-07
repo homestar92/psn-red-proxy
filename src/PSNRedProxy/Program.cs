@@ -13,16 +13,24 @@ namespace GamePreservation.PSNRedProxy
     {
         private static HttpListenerHelp _listener;
         private static object _outputLock = new object();
+        private static MyOptions options = new MyOptions();
 
         static void Main(string[] args)
         {
-            var options = new MyOptions();
-            if (!Parser.Default.ParseArguments(args, options))
+            //var options = new MyOptions();
+            bool shouldQuit = false;
+            Parser.Default.ParseArguments<MyOptions>(args)
+                .WithParsed(opts => SetArgs(opts))
+                .WithNotParsed(action =>
+                {
+                    shouldQuit = true;
+                });
+
+            if (shouldQuit)
             {
                 Console.WriteLine(options.GetUsage());
                 return;
             }
-
             CdnOperate.ReadCdnConfig();
 
             var config = AppConfig.Instance();
@@ -45,11 +53,19 @@ namespace GamePreservation.PSNRedProxy
             if (!MonitorLog.RegexUrl(urlinfo.PsnUrl))
                 return;
 
+            bool hasFileLocal = string.IsNullOrEmpty(urlinfo.ReplacePath);
             lock (_outputLock)
             {
-                Console.ForegroundColor = string.IsNullOrEmpty(urlinfo.ReplacePath) ? ConsoleColor.DarkMagenta : ConsoleColor.Blue;
+                Console.ForegroundColor = hasFileLocal ? ConsoleColor.DarkMagenta : ConsoleColor.Blue;
                 Console.WriteLine(TrimUrlQuery(urlinfo.PsnUrl));
                 Console.ResetColor();
+            }
+            if (!hasFileLocal)
+            {
+                using (var client = new WebClient())
+                {
+                    client.DownloadFile(urlinfo.PsnUrl, urlinfo.ReplacePath);
+                }
             }
         }
 
@@ -65,24 +81,30 @@ namespace GamePreservation.PSNRedProxy
                 return url;
             }
         }
+
+        private static void SetArgs(MyOptions opts)
+        {
+            options.Port = opts.Port;
+            options.IPAddress = opts.IPAddress;
+            options.LocalFolder = opts.LocalFolder;
+        }
     }
 
     class MyAppContext : ApplicationContext
     {
     }
 
-    class MyOptions
+    sealed class MyOptions
     {
         [Option('i', "ip", HelpText = "IP Address", Required = true)]
         public string IPAddress { get; set; }
 
-        [Option('p', "port", HelpText = "Port", Required = false, DefaultValue = 8080)]
+        [Option('p', "port", HelpText = "Port", Required = false, Default = 8080)]
         public int Port { get; set; }
 
-        [Option('l', "LocalFolder", HelpText = "Path to local folder cache", Required = false, DefaultValue = "")]
+        [Option('l', "LocalFolder", HelpText = "Path to local folder cache", Required = false, Default = "")]
         public string LocalFolder { get; set; }
 
-        [HelpOption]
         public string GetUsage()
         {
             var usage = new StringBuilder();
